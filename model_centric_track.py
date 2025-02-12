@@ -3,7 +3,7 @@ import tensorflow_model_optimization as tfmot #for Post Training Quantization (P
 from datasets import load_dataset #for downloading the Wake Vision Dataset
 import tensorflow as tf #for designing and training the model 
 
-model_name = 'wv_k_8_c_5'
+model_name = 'wv_k_8_c_5_sepconv'
 
 #some hyperparameters 
 #Play with them!
@@ -16,44 +16,45 @@ epochs = 100
 #Play with it!
 inputs = keras.Input(shape=input_shape)
 #
-x = keras.layers.Conv2D(8, (3,3), padding='same')(inputs)
+x = keras.layers.SeparableConv2D(8, (3,3), padding='same')(inputs)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 x = keras.layers.MaxPooling2D((2,2))(x)
-x = keras.layers.Conv2D(16, (3,3), padding='same')(x)
+x = keras.layers.SeparableConv2D(16, (3,3), padding='same')(x)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 x = keras.layers.MaxPooling2D((2,2))(x)
-x = keras.layers.Conv2D(24, (3,3), padding='same')(x)
+x = keras.layers.SeparableConv2D(24, (3,3), padding='same')(x)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 x = keras.layers.MaxPooling2D((2,2))(x)
-x = keras.layers.Conv2D(30, (3,3), padding='same')(x)
+x = keras.layers.SeparableConv2D(32, (3,3), padding='same')(x)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 x = keras.layers.MaxPooling2D((2,2))(x)
-x = keras.layers.Conv2D(34, (3,3), padding='same')(x)
+x = keras.layers.SeparableConv2D(40, (3,3), padding='same')(x)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 x = keras.layers.MaxPooling2D((2,2))(x)
-x = keras.layers.Conv2D(37, (3,3), padding='same')(x)
+x = keras.layers.SeparableConv2D(47, (3,3), padding='same')(x)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 x = keras.layers.GlobalAveragePooling2D()(x)
 #
-x = keras.layers.Dense(37)(x)
+x = keras.layers.Dense(47)(x)
 x = keras.layers.BatchNormalization()(x)
 x = keras.layers.ReLU()(x)
 #
 outputs = keras.layers.Dense(2)(x)
 
 model = keras.Model(inputs, outputs)
+
 
 #compile model
 opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
@@ -89,12 +90,17 @@ test_ds = test_ds.map(lambda x, y: (data_preprocessing(x, training=True), y), nu
 
 #set validation based early stopping
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-    filepath= model_name + ".tf",
+    filepath= model_name,
     monitor='val_sparse_categorical_accuracy',
     mode='max', save_best_only=True)
-    
+
+early_stop = tf.keras.callbacks.EarlyStopping(monitor= 'val_loss', patience=12)
+
+reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=2, verbose=1, factor=0.2, min_lr=1e-6)
+
 #training
-model.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=[model_checkpoint_callback])
+#model.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=[model_checkpoint_callback])
+model.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=[model_checkpoint_callback, early_stop, reduce_lr])
 
 #Post Training Quantization (PTQ)
 model = tf.keras.models.load_model(model_name + ".tf")
